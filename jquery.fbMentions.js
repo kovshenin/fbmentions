@@ -127,8 +127,8 @@ jQuery.fn.fbMention = function(autocomplete_data, options) {
 				
 				mention.name = mention.name.split(' ')[0];
 				
-				var hl_expr = new RegExp(mention.name);
-				var hd_expr = new RegExp(mention.name);
+				var hl_expr = new RegExp(mention.name + '(?!\<\/b\>)');
+				var hd_expr = new RegExp(mention.name + '(?!\])');
 				
 				highlight_string = highlight_string.replace(hl_expr, '<b>' + mention.name + '</b>');
 				hidden_string = hidden_string.replace(hd_expr, options.trigger +'[' + mention.id + ':' + mention.name + ']');
