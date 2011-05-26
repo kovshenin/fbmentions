@@ -1,0 +1,306 @@
+<html>
+<head>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.6.1/jquery.min.js"></script>
+	<script>
+		
+		Array.prototype.compare = function(testArr) {
+			if (this.length != testArr.length) return false;
+			for (var i = 0; i < testArr.length; i++) {
+				if (this[i].compare) { 
+					if (!this[i].compare(testArr[i])) return false;
+				}
+				if (this[i] !== testArr[i]) return false;
+			}
+			return true;
+		}
+
+		// Global
+		var isAutocomplete = false;
+		var isAutocompleteLoaded = false;
+		var isAutocompleteLoading = false;
+		var autocomplete_data = null;
+		var previously_found_users = [];
+		var mentions = [];
+
+		
+		jQuery(document).ready(function($){
+			
+			$('.textarea').focus(function() {
+				if (!isAutocompleteLoaded && !isAutocompleteLoading) {
+					isAutocompleteLoading = true;
+					
+					$.post('test.php', {}, function(response) {
+						autocomplete_data = response;
+						isAutocompleteLoaded = true;
+					}, 'json');
+				}
+			});
+			
+			$('.textarea').keydown(function(e){
+
+				if (isAutocomplete) {
+					if (e.keyCode == '13') {
+						
+						var selected = $('.autocomplete a.mention-selected');
+						var user_id = $(selected).attr('data-id');
+						var name = $(selected).attr('data-name');
+						
+						for (i = 0; i < autocomplete_data.length; i++)
+							if (autocomplete_data[i].id == user_id)
+								mentions.push(autocomplete_data[i]);
+						
+						// alert(user_id + ": " + name);
+						var original = $('.textarea').val();
+						var current_position = $('.textarea')[0].selectionStart;
+						var at_position = $('.textarea').val().indexOf('@');
+						
+						var s = original.substring(0, at_position) + name + original.substring(current_position, original.length);
+						$('.textarea').val(s);
+						
+						$('.autocomplete').hide();
+						isAutocomplete = false;
+						
+						e.preventDefault();
+						return
+					
+					} else if (e.keyCode == '38') { // Up
+						
+						var selected = $('.autocomplete a.mention-selected');
+						var previous = $(selected).parent('li').prev('li').find('a');
+						
+						if (previous.length) {
+							$(selected).removeClass('mention-selected');
+							$(previous).addClass('mention-selected');
+						}
+						
+						e.preventDefault();
+						return
+						
+					} else if (e.keyCode == '40') { // Down
+
+						var selected = $('.autocomplete a.mention-selected');
+						var next = $(selected).parent('li').next('li').find('a');
+						
+						if (next.length) {
+							$(selected).removeClass('mention-selected');
+							$(next).addClass('mention-selected');
+						}
+
+						e.preventDefault();
+						return
+
+					}
+				}
+			});
+			
+			$('.textarea').keyup(function(e){
+				
+				// Escape key
+				if (e.keyCode == 27) {
+					isAutocomplete = false;
+					$('.autocomplete').hide();
+					return;
+				}
+				
+				var original = $(this).val();
+				var highlight_string = original;
+				var hidden_string = original;
+				
+				for (i = 0; i < mentions.length; i++) {
+					mention = mentions[i];
+					if (original.indexOf(mention.name) >= 0) {
+						highlight_string = highlight_string.replace(mention.name, '<b>' + mention.name + '</b>');
+						hidden_string = hidden_string.replace(mention.name, '@[' + mention.id + ':' + mention.name + ']');
+					} else if (original.indexOf(mention.name.split(' ')[0]) >= 0) {
+						mention.name = mention.name.split(' ')[0];
+						highlight_string = highlight_string.replace(mention.name, '<b>' + mention.name + '</b>');
+						hidden_string = hidden_string.replace(mention.name, '@[' + mention.id + ':' + mention.name + ']');
+					} else {
+						// remove from mentions
+					}
+				}
+				
+				$('.highlighter').html(highlight_string);
+				$('.hidden').val(hidden_string);
+				
+				var current_position = this.selectionStart;
+				var at_position = $(this).val().indexOf('@');
+				if (current_position < at_position || at_position < 0) return;
+				
+				var piece = $(this).val().substring(at_position, current_position);
+				
+				var reg = /^@\w+ ?(\w+)?$/
+				if (piece.match(reg) && isAutocompleteLoaded) {
+					var search = piece.substring(1, piece.length);
+					var found_users = [];
+					
+					for (i = 0; i < autocomplete_data.length; i++) {
+						var user = autocomplete_data[i];
+						if (user.name.toLowerCase().indexOf(search) > -1) {
+							found_users.push(user);
+						}
+					}
+					
+					if (!found_users.compare(previously_found_users))
+						previously_found_users = found_users;
+					else
+						return;
+					
+					html = '';
+					for (i = 0; i < found_users.length; i++) {
+						avatar = '<img class="avatar" src="' + found_users[i].profile_image_url + '&s=40" width="40" height="40" />';
+						name = '<span class="name">' + found_users[i].name + '</span><br />';
+						email = '<span class="email">' + found_users[i].email + '</span>';
+						html += '<li><a data-id="' + found_users[i].id + '" data-name="' + found_users[i].name + '" href="#' + found_users[i].id + '"><span class="wrapper">' + avatar + name + email + '</span></a></li>';
+					}
+					$('.autocomplete').html(html);
+					$('.autocomplete a:first').addClass('mention-selected');
+					$('.autocomplete').show();
+					isAutocomplete = true;
+
+				} else {
+					$('.autocomplete').hide();
+					isAutocomplete = false;
+				}
+			});	
+		});
+		
+		jQuery('#uiMentions').uiMentions({
+			trigger: '@'
+		});
+		
+	</script>
+	
+	<div id="uiMentions"></div>
+	<style>
+		body {
+			font-family: sans-serif;
+			font-size: 13px;
+		}
+		
+		.highlighter b {
+			font-weight:normal;
+			background: #D8DFEA;
+		}
+		
+		.textarea-container {
+			position: relative;
+			width: 500px;
+			height: 60px;
+			border: solid 1px #ccc;
+		}
+		
+		.textarea {
+			background: transparent;
+			padding: 0;
+			margin: 0;
+			border: 0;
+			resize: none;
+		}
+		
+		.highlighter {
+			color: transparent;
+		}
+		
+		.textarea, .highlighter {
+			position: absolute;
+			top: 0;
+			left: 0;
+			font-family: sans-serif;
+			font-size: 13px;
+			width: 500px;
+			height: 60px;
+			padding: 4px;
+		}
+		
+		.autocomplete li {
+			float: left;
+			clear: both;
+			margin-bottom: 2px;
+			margin-left: 0;
+			width: 100%;
+		}
+		
+		ul.autocomplete {
+			position: absolute;
+			float: left;
+			clear: both;
+			margin-top: 10px;
+			margin-left: 0;
+			padding: 0;
+			width: 500px;
+			background: #f5f5f5;
+		}
+		
+		.autocomplete .avatar {
+			float: left;
+			margin-right: 10px;
+		}
+		
+		.autocomplete .name {
+			font-weight: bold;
+			float: left;
+			text-decoration: none;
+		}
+		
+		.autocomplete a {
+			text-decoration: none !important;
+			color: #3B5998;
+			float: left;
+			clear: both;
+			width: 100%;
+		}
+		
+		.autocomplete a .wrapper {
+			margin: 8px;
+			float: left;
+			width: 484px;
+		}
+		
+		.autocomplete .avatar {
+			border: solid 1px white;
+		}
+		
+		a.mention-selected {
+			background: #3B5998;
+			color: white !important;
+		}
+		
+		a.mention-selected .email {
+			color: #ddd;
+		}
+		
+		.autocomplete .email {
+			color: #666;
+		}
+		
+		.foo {
+		}
+	</style>
+</head>
+<body>
+
+<p>Textarea:</p>
+
+<p>Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.</p>
+
+<div class="foo">
+	<div class="textarea-container">
+		<span class="highlighter"></span>
+		<textarea class="textarea" cols="40" rows="10"></textarea>
+	</div>
+
+	<ul class="autocomplete" style="display: none;">
+		<li><a href="#">Konstantin Kovshenin</a></li>
+		<li><a href="#">Alexander Permyakov</a></li>
+		<li><a href="#">George Washington</a></li>
+	</ul>
+</div>
+
+<p>Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.</p>
+
+<p>Hidden input:</p>
+<input type="text" class="hidden" style="width: 1000px;" />
+
+</body>
+</html>
